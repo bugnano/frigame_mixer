@@ -1,0 +1,614 @@
+/*global jQuery, friGame, soundManager, Audio, AudioContext */
+/*jslint sloppy: true, white: true, browser: true */
+
+// Copyright (c) 2011-2013 Franco Bugnano
+
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
+// Uses ideas and APIs inspired by:
+// gameQuery Copyright (c) 2008 Selim Arsever (gamequery.onaluf.org), licensed under the MIT
+
+(function ($, fg) {
+	var
+		audio_initialized = false,
+		onError = $.noop,
+		context
+	;
+
+	fg.mixer = {
+		canPlay: {}
+	};
+
+	// fg.m shortcut
+	fg.m = fg.mixer;
+
+	fg.m.PChannel = {
+		init: function (options) {
+			var
+				new_options = options || {}
+			;
+
+			// Set default options
+			$.extend(this, {
+				// Public options
+				muted: false,
+				volume: 1,
+				panning: 0
+
+				// Implementation details
+			});
+
+			$.extend(this, fg.pick(new_options, ['muted', 'volume', 'panning']));
+
+			if (context) {
+				this.gainNode = context.createGain();
+				this.pannerNode = context.createPanner();
+				this.gainNode.connect(this.pannerNode);
+			}
+
+			this.setVolume(this);
+		},
+
+		setVolume: function (options) {
+			var
+				new_options = options || {},
+				audio = this.audio,
+				gainNode = this.gainNode,
+				pannerNode = this.pannerNode,
+				muted_redefined = new_options.muted !== undefined,
+				volume_redefined = new_options.volume !== undefined,
+				panning_redefined = new_options.panning !== undefined
+			;
+
+			if (muted_redefined) {
+				this.muted = new_options.muted;
+				if (audio && (!gainNode)) {
+					audio.muted = this.muted;
+				}
+			}
+
+			if (volume_redefined) {
+				this.volume = fg.clamp(new_options.volume, 0, 1);
+				if (audio && (!gainNode)) {
+					audio.volume = this.volume;
+				}
+			}
+
+			if (panning_redefined) {
+				this.panning = fg.clamp(new_options.panning, -1, 1);
+				if (pannerNode) {
+					pannerNode.setPosition(this.panning, 0, 0);
+				}
+			}
+
+			if (muted_redefined || volume_redefined) {
+				if (gainNode) {
+					if (this.muted) {
+						gainNode.gain.value = 0;
+					} else {
+						gainNode.gain.value = this.volume;
+					}
+				}
+			}
+
+			return this;
+		}
+	};
+
+	// Setup Web Audio API
+	(function () {
+		var
+			a,
+			canPlay = fg.m.canPlay
+		;
+
+		if (window.Audio) {
+			a = new Audio();
+			if (a.canPlayType('audio/wav; codecs="1"') === 'probably') {
+				canPlay.wav = true;
+			}
+
+			if (a.canPlayType('audio/ogg; codecs="vorbis"') === 'probably') {
+				canPlay.ogg = true;
+				canPlay.oga = true;
+			}
+
+			if (a.canPlayType('audio/mpeg; codecs="mp3"') === 'probably') {
+				canPlay.mp3 = true;
+			}
+
+			window.addEventListener('load', function () {
+				try {
+					window.AudioContext = window.AudioContext || window.webkitAudioContext;
+					context = new AudioContext();
+					context.createGain = context.createGain || context.createGainNode;
+				}
+				catch (e) {
+					context = null;
+				}
+
+				fg.m.master = Object.create(fg.m.PChannel);
+				fg.m.master.init();
+				if (fg.m.master.pannerNode) {
+					fg.m.master.pannerNode.connect(context.destination);
+				}
+
+				audio_initialized = true;
+			}, false);
+		} else {
+			fg.m.master = Object.create(fg.m.PChannel);
+			fg.m.master.init();
+
+			audio_initialized = true;
+		}
+	}());
+
+	fg.PSound = {
+		init: function (name, soundURLs, options) {
+			var
+				my_options,
+				new_options = options || {}
+			;
+
+			if (this.options) {
+				my_options = this.options;
+			} else {
+				my_options = {};
+				this.options = my_options;
+			}
+
+			// Set default options
+			$.extend(my_options, {
+				// Public options
+				streaming: false
+
+				// Implementation details
+			});
+
+			$.extend(my_options, fg.pick(new_options, ['streaming']));
+
+			$.extend(this, {
+				// Public options
+				name: name,
+
+				// Implementation details
+				soundURLs: soundURLs,
+				initialized: false
+			});
+		},
+
+		// Implementation details
+
+		complete: function () {
+			var
+				audio = this.audio,
+				soundURLs = this.soundURLs,
+				i,
+				canPlay = fg.m.canPlay,
+				sound_url,
+				len_sound_urls,
+				format,
+				request,
+				completed = true,
+				sound_object = this
+			;
+
+			if (!audio_initialized) {
+				return false;
+			}
+
+			if (!this.initialized) {
+				// Step 1: Determine the sound URL
+				if (typeof soundURLs === 'string') {
+					// A single sound URL is given
+					// Determine the file type by the extension (last 3 characters)
+					format = soundURLs.slice(-3).toLowerCase();
+					if (!canPlay[format]) {
+						// Cannot determine file format by extension.
+						// Assume it is an mp3 (the only format recognized by the Flash 8 version of soundManager2)
+						format = 'mp3';
+					}
+					sound_url = soundURLs;
+				} else if (soundURLs instanceof Array) {
+					// Check which sound can be played
+					len_sound_urls = soundURLs.length;
+					for (i = 0; i < len_sound_urls; i += 1) {
+						// Determine the file type by the extension (last 3 characters)
+						format = soundURLs[i].slice(-3).toLowerCase();
+						if (canPlay[format]) {
+							sound_url = soundURLs[i];
+							break;
+						}
+					}
+				} else {
+					// soundURLs is an object literal
+					for (format in canPlay) {
+						if (canPlay.hasOwnProperty(format)) {
+							if (soundURLs[format]) {
+								sound_url = soundURLs[format];
+								break;
+							}
+						}
+					}
+				}
+
+				// Step 2: Create the sound or the Audio element
+				if (sound_url) {
+					if (canPlay[format]) {
+						if (context && (!(this.options.streaming))) {
+							// Sound supported through Web Audio API
+							request = new XMLHttpRequest();
+
+							request.open('GET', sound_url, true);
+							request.responseType = 'arraybuffer';
+
+							// Decode asynchronously
+							request.onload = function () {
+								context.decodeAudioData(request.response, function (buffer) {
+									sound_object.audioBuffer = buffer;
+								}, onError);
+							};
+
+							request.send();
+						} else if (this.options.streaming) {
+							// Sound supported through HTML5 Audio
+							audio = new Audio(sound_url);
+							audio.load();
+							this.audio = audio;
+						}
+					} else {
+						// Sound type not supported -- It is not a fatal error
+						$.noop();
+					}
+				}
+
+				this.initialized = true;
+			}
+
+			if (context && (!(this.options.streaming)) && (!(this.audioBuffer))) {
+				completed = false;
+			}
+
+			if (audio && (audio.readyState < audio.HAVE_ENOUGH_DATA)) {
+				completed = false;
+			}
+
+			return completed;
+		}
+	};
+
+	fg.Sound = fg.Maker(fg.PSound);
+
+	fg.resourceManager.addSound = function (name) {
+		var
+			sound = fg.Sound.apply(this, arguments)
+		;
+
+		return fg.resourceManager.addResource(name, sound);
+	};
+
+	fg.m.PSingleChannel = Object.create(fg.m.PChannel);
+	$.extend(fg.m.PSingleChannel, {
+		init: function (options) {
+			var
+				sound_object = this
+			;
+
+			fg.m.PChannel.init.call(this, arguments);
+
+			if (this.pannerNode) {
+				this.pannerNode.connect(fg.m.master.gainNode);
+			}
+
+			this.doDisconnect = function () {
+				sound_object.disconnect();
+			};
+
+			this.setVolume(this);
+		},
+
+		play: function (options) {
+			// options:
+			// sound: the name of the sound to be played
+			// loop: true or false
+			// callback: when done playing
+			var
+				new_options = options || {},
+				sound = fg.r[new_options.sound] || {},
+				audio = sound.audio,
+				audioBuffer = sound.audioBuffer,
+				source,
+				sound_object = this
+			;
+
+			// Make sure the audio is stopped before changing its options
+			this.stop();
+
+			if (audio) {
+				this.audio = audio;
+
+				if (context) {
+					source = context.createMediaElementSource(audio);
+					this.source = source;
+
+					source.connect(this.gainNode);
+				}
+
+				if (new_options.loop) {
+					audio.loop = true;
+					audio.onended = null;
+				} else if (new_options.callback) {
+					audio.loop = false;
+					audio.onended = function () {
+						new_options.callback.call(sound_object, sound_object);
+					};
+				} else {
+					audio.loop = false;
+					audio.onended = null;
+				}
+
+				audio.currentTime = audio.startTime || 0;
+				audio.play();
+			} else if (audioBuffer) {
+				source = context.createBufferSource();
+				this.source = source;
+
+				source.buffer = audioBuffer;
+				source.connect(this.gainNode);
+
+				if (new_options.loop) {
+					source.loop = true;
+					source.onended = null;
+				} else if (new_options.callback) {
+					source.loop = false;
+					source.onended = function () {
+						sound_object.disconnect();
+						new_options.callback.call(sound_object, sound_object);
+					};
+				} else {
+					source.loop = false;
+					source.onended = this.doDisconnect;
+				}
+
+				this.startTime = context.currentTime;
+				if (source.start) {
+					source.start(0);
+				} else {
+					source.noteOn(0);
+				}
+			} else {
+				// Make sure the callback gets called even if the sound cannot be played
+				if ((!new_options.loop) && new_options.callback) {
+					new_options.callback.call(sound_object, sound_object);
+				}
+			}
+
+			return this;
+		},
+
+		stop: function () {
+			var
+				audio = this.audio,
+				source = this.source
+			;
+
+			if (audio) {
+				audio.pause();
+				audio.currentTime = audio.startTime || 0;
+				this.audio = null;
+			}
+
+			this.pauseTime = 0;
+			this.old_loop = false;
+			this.old_onended = null;
+
+			if (source) {
+				if (source.buffer) {
+					source.onended = null;
+
+					if (source.stop) {
+						source.stop(0);
+					} else {
+						source.noteOff(0);
+					}
+				}
+
+				this.disconnect();
+			}
+
+			return this;
+		},
+
+		pause: function () {
+			var
+				source = this.source
+			;
+
+			if (this.audio) {
+				this.audio.pause();
+			}
+
+			if (source && source.buffer && (!(this.pauseTime))) {
+				// Since pause / resume is not supported in the Web Audio API, here the currentTime is saved,
+				// in order to create a new source object when the sound is resumed
+				this.old_loop = source.loop;
+				this.old_onended = source.onended;
+				source.loop = false;
+				source.onended = null;
+
+				this.pauseTime = context.currentTime;
+				if (source.stop) {
+					source.stop(0);
+				} else {
+					source.noteOff(0);
+				}
+
+				this.disconnect();
+			}
+
+			return this;
+		},
+
+		resume: function () {
+			var
+				source,
+				audioBuffer = this.audioBuffer,
+				offset
+			;
+
+			if (this.audio) {
+				this.audio.play();
+			}
+
+			if (this.pauseTime) {
+				// Since pause / resume is not supported in the Web Audio API, a new source object is created
+				// containing all the values of the old source object
+				source = context.createBufferSource();
+				this.source = source;
+
+				source.buffer = audioBuffer;
+				source.connect(this.gainNode);
+
+				source.loop = this.old_loop;
+				source.onended = this.old_onended;
+				this.old_loop = false;
+				this.old_onended = null;
+
+				offset = (this.pauseTime - this.startTime) % audioBuffer.duration;
+
+				this.pauseTime = 0;
+				this.startTime = context.currentTime - offset;
+				if (source.start) {
+					source.start(0, offset);
+				} else {
+					source.noteGrainOn(0, offset);
+				}
+			}
+
+			return this;
+		},
+
+		disconnect: function () {
+			if (this.source) {
+				this.source.disconnect(0);
+				this.source = null;
+			}
+		}
+	});
+
+	fg.m.SingleChannel = fg.Maker(fg.m.PSingleChannel);
+
+	fg.m.addSingleChannel = function (name, options) {
+		fg.m[name] = fg.m.SingleChannel(options);
+
+		return this;
+	};
+
+	fg.m.PMultiChannel = Object.create(fg.m.PChannel);
+	$.extend(fg.m.PMultiChannel, {
+		init: function (options) {
+			fg.m.PChannel.init.call(this, arguments);
+
+			if (this.pannerNode) {
+				this.pannerNode.connect(fg.m.master.gainNode);
+			}
+
+			this.setVolume(this);
+		},
+
+		play: function (options) {
+			// options:
+			// sound: the name of the sound to be played
+			// callback: when done playing
+			var
+				new_options = options || {},
+				sound = fg.r[new_options.sound] || {},
+				audioBuffer = sound.audioBuffer,
+				source,
+				sound_object = this
+			;
+
+			if (audioBuffer) {
+				source = context.createBufferSource();
+				source.buffer = audioBuffer;
+				source.loop = false;
+				source.connect(this.gainNode);
+
+				if (new_options.callback) {
+					source.onended = function () {
+						source.disconnect(0);
+						new_options.callback.call(sound_object, sound_object);
+					};
+				} else {
+					source.onended = function () {
+						source.disconnect(0);
+					};
+				}
+
+				if (source.start) {
+					source.start(0);
+				} else {
+					source.noteOn(0);
+				}
+			} else {
+				// Make sure the callback gets called even if the sound cannot be played
+				if (new_options.callback) {
+					new_options.callback.call(sound_object, sound_object);
+				}
+			}
+
+			return this;
+		}
+	});
+
+	fg.m.MultiChannel = fg.Maker(fg.m.PMultiChannel);
+
+	fg.m.addMultiChannel = function (name, options) {
+		fg.m[name] = fg.m.MultiChannel(options);
+
+		return this;
+	};
+
+	if (fg.fx) {
+		fg.m.hooks = {
+			volume: {
+				get: function (s) {
+					return s.volume;
+				},
+				set: function (s, value) {
+					s.setVolume({volume: value});
+				}
+			},
+
+			panning: {
+				get: function (s) {
+					return s.panning;
+				},
+				set: function (s, value) {
+					s.setVolume({panning: value});
+				}
+			}
+		};
+
+		fg.m.PChannel.tween = function (properties, options) {
+			return fg.fx.tween.call(this, fg.m.hooks, properties, options);
+		};
+	}
+}(jQuery, friGame));
+
