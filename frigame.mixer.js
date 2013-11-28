@@ -58,8 +58,19 @@
 
 			if (context) {
 				this.gainNode = context.createGain();
-				this.pannerNode = context.createPanner();
-				this.gainNode.connect(this.pannerNode);
+
+				this.gainL = context.createGain();
+				this.gainR = context.createGain();
+				this.splitter = context.createChannelSplitter(2);
+				this.merger = context.createChannelMerger(2);
+
+				this.splitter.connect(this.gainL, 0);
+				this.splitter.connect(this.gainR, 1);
+
+				this.gainL.connect(this.merger, 0, 0);
+				this.gainR.connect(this.merger, 0, 1);
+
+				this.merger.connect(this.gainNode);
 			}
 
 			this.setVolume(this);
@@ -70,7 +81,6 @@
 				new_options = options || {},
 				audio = this.audio,
 				gainNode = this.gainNode,
-				pannerNode = this.pannerNode,
 				muted_redefined = new_options.muted !== undefined,
 				volume_redefined = new_options.volume !== undefined,
 				panning_redefined = new_options.panning !== undefined
@@ -92,8 +102,9 @@
 
 			if (panning_redefined) {
 				this.panning = fg.clamp(new_options.panning, -1, 1);
-				if (pannerNode) {
-					pannerNode.setPosition(this.panning, 0, 0);
+				if (gainNode) {
+					this.gainL.gain.value = ((this.panning * -0.5) + 0.5) * 2;
+					this.gainR.gain.value = ((this.panning * 0.5) + 0.5) * 2;
 				}
 			}
 
@@ -145,8 +156,8 @@
 
 				fg.m.master = Object.create(fg.m.PChannel);
 				fg.m.master.init();
-				if (fg.m.master.pannerNode) {
-					fg.m.master.pannerNode.connect(context.destination);
+				if (fg.m.master.merger) {
+					fg.m.master.merger.connect(context.destination);
 				}
 
 				audio_initialized = true;
@@ -312,8 +323,8 @@
 
 			fg.m.PChannel.init.call(this, arguments);
 
-			if (this.pannerNode) {
-				this.pannerNode.connect(fg.m.master.gainNode);
+			if (this.merger) {
+				this.merger.connect(fg.m.master.splitter);
 			}
 
 			this.doDisconnect = function () {
@@ -346,8 +357,12 @@
 				if (context) {
 					source = context.createMediaElementSource(audio);
 					this.source = source;
-
-					source.connect(this.gainNode);
+					if (source.channelCount < 2) {
+						source.connect(this.gainL);
+						source.connect(this.gainR);
+					} else {
+						source.connect(this.splitter);
+					}
 				}
 
 				if (new_options.loop) {
@@ -356,11 +371,12 @@
 				} else if (new_options.callback) {
 					audio.loop = false;
 					audio.onended = function () {
+						this.disconnect();
 						new_options.callback.call(sound_object, sound_object);
 					};
 				} else {
 					audio.loop = false;
-					audio.onended = null;
+					source.onended = this.doDisconnect;
 				}
 
 				audio.currentTime = audio.startTime || 0;
@@ -370,7 +386,12 @@
 				this.source = source;
 
 				source.buffer = audioBuffer;
-				source.connect(this.gainNode);
+				if (audioBuffer.numberOfChannels < 2) {
+					source.connect(this.gainL);
+					source.connect(this.gainR);
+				} else {
+					source.connect(this.splitter);
+				}
 
 				if (new_options.loop) {
 					source.loop = true;
@@ -378,7 +399,7 @@
 				} else if (new_options.callback) {
 					source.loop = false;
 					source.onended = function () {
-						sound_object.disconnect();
+						this.disconnect();
 						new_options.callback.call(sound_object, sound_object);
 					};
 				} else {
@@ -458,8 +479,6 @@
 				} else {
 					source.noteOff(0);
 				}
-
-				this.disconnect();
 			}
 
 			return this;
@@ -483,7 +502,7 @@
 				this.source = source;
 
 				source.buffer = audioBuffer;
-				source.connect(this.gainNode);
+				source.connect(this.splitter);
 
 				source.loop = this.old_loop;
 				source.onended = this.old_onended;
@@ -506,7 +525,22 @@
 
 		disconnect: function () {
 			if (this.source) {
-				this.source.disconnect(0);
+				if (this.source.buffer) {
+					if (this.source.buffer.numberOfChannels < 2) {
+						this.source.disconnect(1);
+						this.source.disconnect(0);
+					} else {
+						this.source.disconnect(0);
+					}
+				} else {
+					if (this.source.channelCount < 2) {
+						this.source.disconnect(1);
+						this.source.disconnect(0);
+					} else {
+						this.source.disconnect(0);
+					}
+				}
+
 				this.source = null;
 			}
 		}
@@ -525,8 +559,8 @@
 		init: function (options) {
 			fg.m.PChannel.init.call(this, arguments);
 
-			if (this.pannerNode) {
-				this.pannerNode.connect(fg.m.master.gainNode);
+			if (this.merger) {
+				this.merger.connect(fg.m.master.splitter);
 			}
 
 			this.setVolume(this);
@@ -548,17 +582,19 @@
 				source = context.createBufferSource();
 				source.buffer = audioBuffer;
 				source.loop = false;
-				source.connect(this.gainNode);
+				if (audioBuffer.numberOfChannels < 2) {
+					source.connect(this.gainL);
+					source.connect(this.gainR);
+				} else {
+					source.connect(this.splitter);
+				}
 
 				if (new_options.callback) {
 					source.onended = function () {
-						source.disconnect(0);
 						new_options.callback.call(sound_object, sound_object);
 					};
 				} else {
-					source.onended = function () {
-						source.disconnect(0);
-					};
+					source.onended = null;
 				}
 
 				if (source.start) {
