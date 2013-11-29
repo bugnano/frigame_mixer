@@ -525,22 +525,7 @@
 
 		disconnect: function () {
 			if (this.source) {
-				if (this.source.buffer) {
-					if (this.source.buffer.numberOfChannels < 2) {
-						this.source.disconnect(1);
-						this.source.disconnect(0);
-					} else {
-						this.source.disconnect(0);
-					}
-				} else {
-					if (this.source.channelCount < 2) {
-						this.source.disconnect(1);
-						this.source.disconnect(0);
-					} else {
-						this.source.disconnect(0);
-					}
-				}
-
+				this.source.loop = false;
 				this.source = null;
 			}
 		}
