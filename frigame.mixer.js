@@ -26,6 +26,8 @@
 
 (function ($, fg) {
 	var
+		sm2_loaded = false,
+		sm2_ok = false,
 		audio_initialized = false,
 		onError = $.noop,
 		context
@@ -37,90 +39,6 @@
 
 	// fg.m shortcut
 	fg.m = fg.mixer;
-
-	fg.m.PChannel = {
-		init: function (options) {
-			var
-				new_options = options || {}
-			;
-
-			// Set default options
-			$.extend(this, {
-				// Public options
-				muted: false,
-				volume: 1,
-				panning: 0
-
-				// Implementation details
-			});
-
-			$.extend(this, fg.pick(new_options, ['muted', 'volume', 'panning']));
-
-			if (context) {
-				this.gainNode = context.createGain();
-
-				this.gainL = context.createGain();
-				this.gainR = context.createGain();
-				this.splitter = context.createChannelSplitter(2);
-				this.merger = context.createChannelMerger(2);
-
-				this.splitter.connect(this.gainL, 0);
-				this.splitter.connect(this.gainR, 1);
-
-				this.gainL.connect(this.merger, 0, 0);
-				this.gainR.connect(this.merger, 0, 1);
-
-				this.merger.connect(this.gainNode);
-			}
-
-			this.setVolume(this);
-		},
-
-		setVolume: function (options) {
-			var
-				new_options = options || {},
-				audio = this.audio,
-				gainNode = this.gainNode,
-				muted_redefined = new_options.muted !== undefined,
-				volume_redefined = new_options.volume !== undefined,
-				panning_redefined = new_options.panning !== undefined
-			;
-
-			if (muted_redefined) {
-				this.muted = new_options.muted;
-				if (audio && (!gainNode)) {
-					audio.muted = this.muted;
-				}
-			}
-
-			if (volume_redefined) {
-				this.volume = fg.clamp(new_options.volume, 0, 1);
-				if (audio && (!gainNode)) {
-					audio.volume = this.volume;
-				}
-			}
-
-			if (panning_redefined) {
-				this.panning = fg.clamp(new_options.panning, -1, 1);
-				if (gainNode) {
-					this.gainL.gain.value = ((this.panning * -0.5) + 0.5) * 2;
-					this.gainR.gain.value = ((this.panning * 0.5) + 0.5) * 2;
-				}
-			}
-
-			if (muted_redefined || volume_redefined) {
-				if (gainNode) {
-					if (this.muted) {
-						gainNode.gain.value = 0;
-					} else {
-						gainNode.gain.value = this.volume;
-					}
-				}
-			}
-
-			return this;
-		}
-	};
 
 	// Setup Web Audio API
 	(function () {
@@ -154,21 +72,49 @@
 					context = null;
 				}
 
-				fg.m.master = Object.create(fg.m.PChannel);
-				fg.m.master.init();
-				if (fg.m.master.merger) {
-					fg.m.master.merger.connect(context.destination);
-				}
-
 				audio_initialized = true;
 			}, false);
 		} else {
-			fg.m.master = Object.create(fg.m.PChannel);
-			fg.m.master.init();
-
 			audio_initialized = true;
 		}
 	}());
+
+	// Setup soundManager2
+	if (window.soundManager) {
+		soundManager.onready(function() {
+			// mp3 is the only supported format for the Flash 8 version of soundManager2
+			if (!fg.mixer.canPlay.mp3) {
+				fg.mixer.canPlay.mp3 = 'sm2';
+			}
+
+			sm2_loaded = true;
+			sm2_ok = true;
+		});
+
+		soundManager.ontimeout(function() {
+			sm2_loaded = true;
+		});
+
+		soundManager.setup({
+			url: './',
+			flashVersion: 9,
+			debugMode: false,
+			useFlashBlock: false,
+
+			preferFlash: true,
+			useHTML5Audio: false,
+
+			useHighPerformance: true,
+			wmode: 'transparent',
+
+			defaultOptions: {
+				multiShot: true,
+				multiShotEvents: true
+			}
+		});
+	} else {
+		sm2_loaded = true;
+	}
 
 	fg.PSound = {
 		init: function (name, soundURLs, options) {
@@ -204,14 +150,24 @@
 			});
 		},
 
+		// Public functions
+
+		remove: function () {
+			if (this.sound) {
+				this.sound.destruct();
+			}
+		},
+
 		// Implementation details
 
 		complete: function () {
 			var
+				sound = this.sound,
 				audio = this.audio,
 				soundURLs = this.soundURLs,
 				i,
 				canPlay = fg.m.canPlay,
+				prefer_sm2 = (!context) && sm2_ok && (!(this.options.streaming)),
 				sound_url,
 				len_sound_urls,
 				format,
@@ -220,7 +176,7 @@
 				sound_object = this
 			;
 
-			if (!audio_initialized) {
+			if ((!sm2_loaded) || (!audio_initialized)) {
 				return false;
 			}
 
@@ -239,21 +195,48 @@
 				} else if (soundURLs instanceof Array) {
 					// Check which sound can be played
 					len_sound_urls = soundURLs.length;
-					for (i = 0; i < len_sound_urls; i += 1) {
-						// Determine the file type by the extension (last 3 characters)
-						format = soundURLs[i].slice(-3).toLowerCase();
-						if (canPlay[format]) {
-							sound_url = soundURLs[i];
-							break;
+
+					if (prefer_sm2) {
+						for (i = 0; i < len_sound_urls; i += 1) {
+							// Determine the file type by the extension (last 3 characters)
+							format = soundURLs[i].slice(-3).toLowerCase();
+							if ((format === 'mp3') || (canPlay[format] === 'sm2')) {
+								sound_url = soundURLs[i];
+								break;
+							}
+						}
+					} else {
+						for (i = 0; i < len_sound_urls; i += 1) {
+							// Determine the file type by the extension (last 3 characters)
+							format = soundURLs[i].slice(-3).toLowerCase();
+							if (canPlay[format]) {
+								sound_url = soundURLs[i];
+								break;
+							}
 						}
 					}
 				} else {
 					// soundURLs is an object literal
-					for (format in canPlay) {
-						if (canPlay.hasOwnProperty(format)) {
-							if (soundURLs[format]) {
-								sound_url = soundURLs[format];
-								break;
+					if (prefer_sm2) {
+						if (soundURLs.mp3) {
+							sound_url = soundURLs.mp3;
+						} else {
+							for (format in canPlay) {
+								if (canPlay[format] === 'sm2') {
+									if (soundURLs[format]) {
+										sound_url = soundURLs[format];
+										break;
+									}
+								}
+							}
+						}
+					} else {
+						for (format in canPlay) {
+							if (canPlay.hasOwnProperty(format)) {
+								if (soundURLs[format]) {
+									sound_url = soundURLs[format];
+									break;
+								}
 							}
 						}
 					}
@@ -261,9 +244,19 @@
 
 				// Step 2: Create the sound or the Audio element
 				if (sound_url) {
-					if (canPlay[format]) {
+					if (prefer_sm2 || (canPlay[format] === 'sm2')) {
+						// Sound supported through soundManager2
+						sound = soundManager.createSound({
+							id: this.name,
+							url: sound_url
+						});
+						sound.load();
+						this.sound = sound;
+					} else if (canPlay[format]) {
 						if (context && (!(this.options.streaming))) {
 							// Sound supported through Web Audio API
+							this.waitAudioBuffer = true;
+
 							request = new XMLHttpRequest();
 
 							request.open('GET', sound_url, true);
@@ -273,6 +266,7 @@
 							request.onload = function () {
 								context.decodeAudioData(request.response, function (buffer) {
 									sound_object.audioBuffer = buffer;
+									sound_object.waitAudioBuffer = false;
 								}, onError);
 							};
 
@@ -282,6 +276,9 @@
 							audio = new Audio(sound_url);
 							audio.load();
 							this.audio = audio;
+						} else {
+							// Sound type not supported -- It is not a fatal error
+							$.noop();
 						}
 					} else {
 						// Sound type not supported -- It is not a fatal error
@@ -292,7 +289,11 @@
 				this.initialized = true;
 			}
 
-			if (context && (!(this.options.streaming)) && (!(this.audioBuffer))) {
+			if (sound && (sound.readyState < 3)) {
+				completed = false;
+			}
+
+			if (this.waitAudioBuffer) {
 				completed = false;
 			}
 
@@ -314,56 +315,179 @@
 		return fg.resourceManager.addResource(name, sound);
 	};
 
-	fg.m.PSingleChannel = Object.create(fg.m.PChannel);
-	$.extend(fg.m.PSingleChannel, {
+	fg.m.PChannel = {
 		init: function (options) {
 			var
-				sound_object = this
+				new_options = options || {}
 			;
 
-			fg.m.PChannel.init.call(this, arguments);
+			// Set default options
+			$.extend(this, {
+				// Public options
+				muted: false,
+				volume: 1,
+				panning: 0
 
-			if (this.merger) {
-				this.merger.connect(fg.m.master.splitter);
+				// Implementation details
+			});
+
+			$.extend(this, fg.pick(new_options, ['muted', 'volume', 'panning']));
+
+			if (context) {
+				this.gainNode = context.createGain();
+
+				this.gainL = context.createGain();
+				this.gainR = context.createGain();
+				this.splitter = context.createChannelSplitter(2);
+				this.merger = context.createChannelMerger(2);
+
+				this.splitter.connect(this.gainL, 0);
+				this.splitter.connect(this.gainR, 1);
+
+				this.gainL.connect(this.merger, 0, 0);
+				this.gainR.connect(this.merger, 0, 1);
+
+				this.merger.connect(this.gainNode);
+				this.gainNode.connect(context.destination);
 			}
-
-			this.doDisconnect = function () {
-				sound_object.disconnect();
-			};
 
 			this.setVolume(this);
 		},
 
-		play: function (options) {
+		setVolume: function (options) {
+			var
+				new_options = options || {},
+				sound = this.sound,
+				audio = this.audio,
+				gainNode = this.gainNode,
+				muted_redefined = new_options.muted !== undefined,
+				volume_redefined = new_options.volume !== undefined,
+				panning_redefined = new_options.panning !== undefined
+			;
+
+			if (muted_redefined) {
+				this.muted = new_options.muted;
+				if (audio) {
+					audio.muted = this.muted;
+				}
+			}
+
+			if (volume_redefined) {
+				this.volume = fg.clamp(new_options.volume, 0, 1);
+				if (audio) {
+					audio.volume = this.volume;
+				}
+			}
+
+			if (panning_redefined) {
+				this.panning = fg.clamp(new_options.panning, -1, 1);
+				if (sound) {
+					sound.setPan(Math.round(this.panning * 100));
+				}
+
+				// Stereo panning is not supported for HTML5 Audio
+
+				if (gainNode) {
+					this.gainL.gain.value = 1 - this.panning;
+					this.gainR.gain.value = 1 + this.panning;
+				}
+			}
+
+			if (muted_redefined || volume_redefined) {
+				if (sound) {
+					if (this.muted) {
+						sound.setVolume(0);
+					} else {
+						sound.setVolume(Math.round(this.volume * 100));
+					}
+				}
+
+				if (gainNode) {
+					if (this.muted) {
+						gainNode.gain.value = 0;
+					} else {
+						gainNode.gain.value = this.volume;
+					}
+				}
+			}
+
+			return this;
+		}
+	};
+
+	fg.m.PSingleChannel = Object.create(fg.m.PChannel);
+	$.extend(fg.m.PSingleChannel, {
+		init: function (options) {
+			var
+				channel = this
+			;
+
+			fg.m.PChannel.init.call(this, arguments);
+
+			this.doDisconnect = function () {
+				channel.disconnect();
+			};
+
+			this.doReplay = function () {
+				channel.replay();
+			};
+		},
+
+		// Public functions
+
+		play: function (name, options) {
 			// options:
-			// sound: the name of the sound to be played
 			// loop: true or false
 			// callback: when done playing
 			var
 				new_options = options || {},
-				sound = fg.r[new_options.sound] || {},
-				audio = sound.audio,
-				audioBuffer = sound.audioBuffer,
+				sound_options = {},
+				sound_object = fg.r[name] || {},
+				sound = sound_object.sound,
+				audio = sound_object.audio,
+				audioBuffer = sound_object.audioBuffer,
 				source,
-				sound_object = this
+				channel = this
 			;
 
 			// Make sure the audio is stopped before changing its options
 			this.stop();
 
-			if (audio) {
+			if (sound) {
+				this.sound = sound;
+
+				if (sound_object.options.streaming) {
+					sound.stop();
+				}
+
+				if (this.muted) {
+					sound_options.volume = 0;
+				} else {
+					sound_options.volume = Math.round(this.volume * 100);
+				}
+
+				sound_options.pan = Math.round(this.panning * 100);
+
+				if (new_options.loop) {
+					sound_options.onfinish = this.doReplay;
+				} else if (new_options.callback) {
+					sound_options.onfinish = function () {
+						channel.disconnect();
+						new_options.callback.call(channel, channel);
+					};
+				} else {
+					sound_options.onfinish = this.doDisconnect;
+				}
+
+				sound.play(sound_options);
+			} else if (audio) {
 				this.audio = audio;
 
-				if (context) {
-					source = context.createMediaElementSource(audio);
-					this.source = source;
-					if (source.channelCount < 2) {
-						source.connect(this.gainL);
-						source.connect(this.gainR);
-					} else {
-						source.connect(this.splitter);
-					}
-				}
+				audio.pause();
+				audio.currentTime = audio.startTime || 0;
+
+				audio.muted = this.muted;
+				audio.volume = this.volume;
 
 				if (new_options.loop) {
 					audio.loop = true;
@@ -371,17 +495,18 @@
 				} else if (new_options.callback) {
 					audio.loop = false;
 					audio.onended = function () {
-						this.disconnect();
-						new_options.callback.call(sound_object, sound_object);
+						channel.disconnect();
+						new_options.callback.call(channel, channel);
 					};
 				} else {
 					audio.loop = false;
 					source.onended = this.doDisconnect;
 				}
 
-				audio.currentTime = audio.startTime || 0;
 				audio.play();
 			} else if (audioBuffer) {
+				this.audioBuffer = audioBuffer;
+
 				source = context.createBufferSource();
 				this.source = source;
 
@@ -399,8 +524,8 @@
 				} else if (new_options.callback) {
 					source.loop = false;
 					source.onended = function () {
-						this.disconnect();
-						new_options.callback.call(sound_object, sound_object);
+						channel.disconnect();
+						new_options.callback.call(channel, channel);
 					};
 				} else {
 					source.loop = false;
@@ -416,7 +541,7 @@
 			} else {
 				// Make sure the callback gets called even if the sound cannot be played
 				if ((!new_options.loop) && new_options.callback) {
-					new_options.callback.call(sound_object, sound_object);
+					new_options.callback.call(channel, channel);
 				}
 			}
 
@@ -425,14 +550,16 @@
 
 		stop: function () {
 			var
-				audio = this.audio,
 				source = this.source
 			;
 
-			if (audio) {
-				audio.pause();
-				audio.currentTime = audio.startTime || 0;
-				this.audio = null;
+			if (this.sound) {
+				this.sound.stop();
+			}
+
+			if (this.audio) {
+				this.audio.pause();
+				this.audio.currentTime = this.audio.startTime || 0;
 			}
 
 			this.pauseTime = 0;
@@ -449,9 +576,9 @@
 						source.noteOff(0);
 					}
 				}
-
-				this.disconnect();
 			}
+
+			this.disconnect();
 
 			return this;
 		},
@@ -460,6 +587,10 @@
 			var
 				source = this.source
 			;
+
+			if (this.sound) {
+				this.sound.pause();
+			}
 
 			if (this.audio) {
 				this.audio.pause();
@@ -479,6 +610,8 @@
 				} else {
 					source.noteOff(0);
 				}
+
+				this.source = null;
 			}
 
 			return this;
@@ -491,6 +624,10 @@
 				offset
 			;
 
+			if (this.sound) {
+				this.sound.resume();
+			}
+
 			if (this.audio) {
 				this.audio.play();
 			}
@@ -502,7 +639,12 @@
 				this.source = source;
 
 				source.buffer = audioBuffer;
-				source.connect(this.splitter);
+				if (audioBuffer.numberOfChannels < 2) {
+					source.connect(this.gainL);
+					source.connect(this.gainR);
+				} else {
+					source.connect(this.splitter);
+				}
 
 				source.loop = this.old_loop;
 				source.onended = this.old_onended;
@@ -523,11 +665,41 @@
 			return this;
 		},
 
+		// Implementation details
+
+		replay: function () {
+			var
+				sound_options = {}
+			;
+
+			if (this.muted) {
+				sound_options.volume = 0;
+			} else {
+				sound_options.volume = Math.round(this.volume * 100);
+			}
+
+			sound_options.pan = Math.round(this.panning * 100);
+
+			sound_options.onfinish = this.doReplay;
+
+			this.sound.play(sound_options);
+		},
+
 		disconnect: function () {
+			this.sound = null;
+
+			if (this.audio) {
+				this.audio.loop = false;
+			}
+
+			this.audio = null;
+
 			if (this.source) {
 				this.source.loop = false;
-				this.source = null;
 			}
+
+			this.source = null;
+			this.audioBuffer = null;
 		}
 	});
 
@@ -541,29 +713,38 @@
 
 	fg.m.PMultiChannel = Object.create(fg.m.PChannel);
 	$.extend(fg.m.PMultiChannel, {
-		init: function (options) {
-			fg.m.PChannel.init.call(this, arguments);
-
-			if (this.merger) {
-				this.merger.connect(fg.m.master.splitter);
-			}
-
-			this.setVolume(this);
-		},
-
-		play: function (options) {
+		play: function (name, options) {
 			// options:
-			// sound: the name of the sound to be played
 			// callback: when done playing
 			var
 				new_options = options || {},
-				sound = fg.r[new_options.sound] || {},
-				audioBuffer = sound.audioBuffer,
+				sound_options = {},
+				sound_object = fg.r[name] || {},
+				sound = sound_object.sound,
+				audioBuffer = sound_object.audioBuffer,
 				source,
-				sound_object = this
+				channel = this
 			;
 
-			if (audioBuffer) {
+			if (sound) {
+				if (this.muted) {
+					sound_options.volume = 0;
+				} else {
+					sound_options.volume = Math.round(this.volume * 100);
+				}
+
+				sound_options.pan = Math.round(this.panning * 100);
+
+				if (new_options.callback) {
+					sound_options.onfinish = function () {
+						new_options.callback.call(channel, channel);
+					};
+				} else {
+					sound_options.onfinish = null;
+				}
+
+				sound.play(sound_options);
+			} else if (audioBuffer) {
 				source = context.createBufferSource();
 				source.buffer = audioBuffer;
 				source.loop = false;
@@ -576,7 +757,7 @@
 
 				if (new_options.callback) {
 					source.onended = function () {
-						new_options.callback.call(sound_object, sound_object);
+						new_options.callback.call(channel, channel);
 					};
 				} else {
 					source.onended = null;
@@ -590,7 +771,7 @@
 			} else {
 				// Make sure the callback gets called even if the sound cannot be played
 				if (new_options.callback) {
-					new_options.callback.call(sound_object, sound_object);
+					new_options.callback.call(channel, channel);
 				}
 			}
 

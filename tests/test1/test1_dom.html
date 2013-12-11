@@ -7,6 +7,7 @@
 
 		<script src="../../deps/frigame/deps/modernizr.js"></script>
 		<script src="../../deps/frigame/deps/base64.js"></script>
+		<script src="../../deps/frigame/deps/soundmanager2.js"></script>
 		<script src="../../deps/frigame/deps/jquery.js"></script>
 		<script src="../../deps/frigame/frigame.common.js"></script>
 		<script src="../../deps/frigame/frigame.dom.js"></script>
@@ -17,6 +18,9 @@
 		<script src="test1_frigame.js"></script>
 	</head>
 	<body style="position: relative;">
+		<input type="button" id="start" value="Start Loading" />
+		<input type="button" id="monomp3" value="Mono (mp3)" />
+		<input type="button" id="stereomp3" value="Stereo (mp3)" />
 		<input type="button" id="monosfx" value="Mono (sfx)" />
 		<input type="button" id="stereosfx" value="Stereo (sfx)" />
 		<input type="button" id="monowebaudio" value="Mono (webaudio)" />
@@ -27,7 +31,7 @@
 		<input type="button" id="pancenter" value="Pan center" />
 		<input type="button" id="panright" value="Pan right" />
 		<input type="button" id="stop" value="Stop" />
-		<div id="playground" style="position: relative; width: 1024px; height: 640px; background: #FFFFFF"></div>
+		<div id="playground" style="position: relative; width: 256px; height: 224px; background: #FFFFFF"></div>
 	</body>
 </html>
 

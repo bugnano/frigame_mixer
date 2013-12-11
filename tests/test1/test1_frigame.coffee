@@ -3,57 +3,70 @@ fg = friGame
 
 $(() ->
 	fg.resourceManager
-		.addSound('news', 'news_intro.ogg')
-		.addSound('prova', 'prova.ogg')
-		.addSound('s_news', 'news_intro.ogg', {streaming: true})
-		.addSound('s_prova', 'prova.ogg', {streaming: true})
+		.addSound('stereomp3', 'news_intro.mp3')
+		.addSound('monomp3', 'prova.mp3')
+		.addSound('news', ['news_intro.ogg', 'news_intro.mp3'])
+		.addSound('prova', ['prova.ogg', 'prova.mp3'])
+		.addSound('s_news', ['news_intro.ogg', 'news_intro.mp3'], {streaming: true})
+		.addSound('s_prova', ['prova.ogg', 'prova.mp3'], {streaming: true})
 
-	fg.startGame(() ->
-		fg.playground()
-		fg.m.addMultiChannel('sfx')
-		fg.m.addSingleChannel('music')
+	$('#start').one('click', () ->
+		fg.startGame(() ->
+			$('<div>Loaded</div>').prependTo('#playground')
+			fg.playground()
+			fg.m.addMultiChannel('sfx')
+			fg.m.addSingleChannel('music')
 
-		$('#monosfx').click(() ->
-			fg.m.sfx.play({sound: 'prova'})
-		)
+			$('#monomp3').click(() ->
+				fg.m.sfx.play('monomp3')
+			)
 
-		$('#stereosfx').click(() ->
-			fg.m.sfx.play({sound: 'news'})
-		)
+			$('#stereomp3').click(() ->
+				fg.m.sfx.play('stereomp3')
+			)
 
-		$('#monowebaudio').click(() ->
-			fg.m.music.play({sound: 'prova', loop: true})
-		)
+			$('#monosfx').click(() ->
+				fg.m.sfx.play('prova')
+			)
 
-		$('#stereowebaudio').click(() ->
-			fg.m.music.play({sound: 'news', loop: true})
-		)
+			$('#stereosfx').click(() ->
+				fg.m.sfx.play('news')
+			)
 
-		$('#monohtml5').click(() ->
-			fg.m.music.play({sound: 's_prova', loop: true})
-		)
+			$('#monowebaudio').click(() ->
+				fg.m.music.play('prova', {loop: true})
+			)
 
-		$('#stereohtml5').click(() ->
-			fg.m.music.play({sound: 's_news', loop: true})
-		)
+			$('#stereowebaudio').click(() ->
+				fg.m.music.play('news', {loop: true})
+			)
 
-		$('#panleft').click(() ->
-			fg.m.sfx.tween({panning: -1}, {duration: 1000})
-			fg.m.music.tween({panning: -1}, {duration: 1000})
-		)
+			$('#monohtml5').click(() ->
+				fg.m.music.play('s_prova', {loop: true})
+			)
 
-		$('#pancenter').click(() ->
-			fg.m.sfx.tween({panning: 0}, {duration: 1000})
-			fg.m.music.tween({panning: 0}, {duration: 1000})
-		)
+			$('#stereohtml5').click(() ->
+				fg.m.music.play('s_news', {loop: true})
+			)
 
-		$('#panright').click(() ->
-			fg.m.sfx.tween({panning: 1}, {duration: 1000})
-			fg.m.music.tween({panning: 1}, {duration: 1000})
-		)
+			$('#panleft').click(() ->
+				fg.m.sfx.tween({panning: -1}, {duration: 1000})
+				fg.m.music.tween({panning: -1}, {duration: 1000})
+			)
 
-		$('#stop').click(() ->
-			fg.m.music.stop()
+			$('#pancenter').click(() ->
+				fg.m.sfx.tween({panning: 0}, {duration: 1000})
+				fg.m.music.tween({panning: 0}, {duration: 1000})
+			)
+
+			$('#panright').click(() ->
+				fg.m.sfx.tween({panning: 1}, {duration: 1000})
+				fg.m.music.tween({panning: 1}, {duration: 1000})
+			)
+
+			$('#stop').click(() ->
+				fg.m.music.stop()
+			)
 		)
 	)
 )
