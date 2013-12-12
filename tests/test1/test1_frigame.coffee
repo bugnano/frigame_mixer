@@ -7,12 +7,68 @@ $(() ->
 		.addSound('monomp3', 'prova.mp3')
 		.addSound('news', ['news_intro.ogg', 'news_intro.mp3'])
 		.addSound('prova', ['prova.ogg', 'prova.mp3'])
-		.addSound('s_news', ['news_intro.ogg', 'news_intro.mp3'], {streaming: true})
-		.addSound('s_prova', ['prova.ogg', 'prova.mp3'], {streaming: true})
 
 	$('#start').one('click', () ->
 		fg.startGame(() ->
-			$('<div>Loaded</div>').prependTo('#playground')
+			$('<div id="loaded">Loaded</div>').insertBefore('#playground')
+			$('<div id="dbgconsole"></div>').insertAfter('#loaded')
+			debug_print = (text) ->
+				$('<div></div>')
+					.html(text)
+					.appendTo('#dbgconsole')
+
+			$('#loadmono').click(() ->
+				fg.m.music.stop()
+
+				if fg.r.s_news
+					fg.resourceManager.removeResource('s_news')
+
+				if fg.r.s_prova
+					fg.resourceManager.removeResource('s_prova')
+
+				fg.resourceManager
+					.addSound('s_prova', ['prova.ogg', 'prova.mp3'], {streaming: true})
+
+				fg.startGame(() ->
+					debug_print('Loaded mono')
+					debug_print("audio: #{fg.r.s_prova.audio}")
+					if fg.r.s_prova.audio
+						debug_print("src: #{fg.r.s_prova.audio.src}")
+						debug_print("error: #{fg.r.s_prova.audio.error}")
+						debug_print("networkState: #{fg.r.s_prova.audio.networkState}")
+						debug_print("readyState: #{fg.r.s_prova.audio.readyState}")
+				)
+			)
+
+			$('#loadstereo').click(() ->
+				fg.m.music.stop()
+
+				if fg.r.s_news
+					fg.resourceManager.removeResource('s_news')
+
+				if fg.r.s_prova
+					fg.resourceManager.removeResource('s_prova')
+
+				fg.resourceManager
+					.addSound('s_news', ['news_intro.ogg', 'news_intro.mp3'], {streaming: true})
+
+				fg.startGame(() ->
+					debug_print('Loaded stereo')
+					debug_print("audio: #{fg.r.s_news.audio}")
+					if fg.r.s_news.audio
+						debug_print("src: #{fg.r.s_news.audio.src}")
+						debug_print("error: #{fg.r.s_news.audio.error}")
+						debug_print("networkState: #{fg.r.s_news.audio.networkState}")
+						debug_print("readyState: #{fg.r.s_news.audio.readyState}")
+				)
+			)
+
+			debug_print('canPlay:')
+			for k, v of fg.m.canPlay
+				debug_print("#{k}: #{v}")
+
+			debug_print("audioBuffer: #{fg.r.news.audioBuffer}")
+
 			fg.playground()
 			fg.m.addMultiChannel('sfx')
 			fg.m.addSingleChannel('music')
@@ -43,10 +99,22 @@ $(() ->
 
 			$('#monohtml5').click(() ->
 				fg.m.music.play('s_prova', {loop: true})
+				if fg.r.s_prova
+					if fg.r.s_prova.audio
+						debug_print("src: #{fg.r.s_prova.audio.src}")
+						debug_print("error: #{fg.r.s_prova.audio.error}")
+						debug_print("networkState: #{fg.r.s_prova.audio.networkState}")
+						debug_print("readyState: #{fg.r.s_prova.audio.readyState}")
 			)
 
 			$('#stereohtml5').click(() ->
 				fg.m.music.play('s_news', {loop: true})
+				if fg.r.s_news
+					if fg.r.s_news.audio
+						debug_print("src: #{fg.r.s_news.audio.src}")
+						debug_print("error: #{fg.r.s_news.audio.error}")
+						debug_print("networkState: #{fg.r.s_news.audio.networkState}")
+						debug_print("readyState: #{fg.r.s_news.audio.readyState}")
 			)
 
 			$('#panleft').click(() ->

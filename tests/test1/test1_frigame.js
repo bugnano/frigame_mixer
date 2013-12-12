@@ -7,14 +7,66 @@
   fg = friGame;
 
   $(function() {
-    fg.resourceManager.addSound('stereomp3', 'news_intro.mp3').addSound('monomp3', 'prova.mp3').addSound('news', ['news_intro.ogg', 'news_intro.mp3']).addSound('prova', ['prova.ogg', 'prova.mp3']).addSound('s_news', ['news_intro.ogg', 'news_intro.mp3'], {
-      streaming: true
-    }).addSound('s_prova', ['prova.ogg', 'prova.mp3'], {
-      streaming: true
-    });
+    fg.resourceManager.addSound('stereomp3', 'news_intro.mp3').addSound('monomp3', 'prova.mp3').addSound('news', ['news_intro.ogg', 'news_intro.mp3']).addSound('prova', ['prova.ogg', 'prova.mp3']);
     return $('#start').one('click', function() {
       return fg.startGame(function() {
-        $('<div>Loaded</div>').prependTo('#playground');
+        var debug_print, k, v, _ref;
+        $('<div id="loaded">Loaded</div>').insertBefore('#playground');
+        $('<div id="dbgconsole"></div>').insertAfter('#loaded');
+        debug_print = function(text) {
+          return $('<div></div>').html(text).appendTo('#dbgconsole');
+        };
+        $('#loadmono').click(function() {
+          fg.m.music.stop();
+          if (fg.r.s_news) {
+            fg.resourceManager.removeResource('s_news');
+          }
+          if (fg.r.s_prova) {
+            fg.resourceManager.removeResource('s_prova');
+          }
+          fg.resourceManager.addSound('s_prova', ['prova.ogg', 'prova.mp3'], {
+            streaming: true
+          });
+          return fg.startGame(function() {
+            debug_print('Loaded mono');
+            debug_print("audio: " + fg.r.s_prova.audio);
+            if (fg.r.s_prova.audio) {
+              debug_print("src: " + fg.r.s_prova.audio.src);
+              debug_print("error: " + fg.r.s_prova.audio.error);
+              debug_print("networkState: " + fg.r.s_prova.audio.networkState);
+              return debug_print("readyState: " + fg.r.s_prova.audio.readyState);
+            }
+          });
+        });
+        $('#loadstereo').click(function() {
+          fg.m.music.stop();
+          if (fg.r.s_news) {
+            fg.resourceManager.removeResource('s_news');
+          }
+          if (fg.r.s_prova) {
+            fg.resourceManager.removeResource('s_prova');
+          }
+          fg.resourceManager.addSound('s_news', ['news_intro.ogg', 'news_intro.mp3'], {
+            streaming: true
+          });
+          return fg.startGame(function() {
+            debug_print('Loaded stereo');
+            debug_print("audio: " + fg.r.s_news.audio);
+            if (fg.r.s_news.audio) {
+              debug_print("src: " + fg.r.s_news.audio.src);
+              debug_print("error: " + fg.r.s_news.audio.error);
+              debug_print("networkState: " + fg.r.s_news.audio.networkState);
+              return debug_print("readyState: " + fg.r.s_news.audio.readyState);
+            }
+          });
+        });
+        debug_print('canPlay:');
+        _ref = fg.m.canPlay;
+        for (k in _ref) {
+          v = _ref[k];
+          debug_print("" + k + ": " + v);
+        }
+        debug_print("audioBuffer: " + fg.r.news.audioBuffer);
         fg.playground();
         fg.m.addMultiChannel('sfx');
         fg.m.addSingleChannel('music');
@@ -41,14 +93,30 @@
           });
         });
         $('#monohtml5').click(function() {
-          return fg.m.music.play('s_prova', {
+          fg.m.music.play('s_prova', {
             loop: true
           });
+          if (fg.r.s_prova) {
+            if (fg.r.s_prova.audio) {
+              debug_print("src: " + fg.r.s_prova.audio.src);
+              debug_print("error: " + fg.r.s_prova.audio.error);
+              debug_print("networkState: " + fg.r.s_prova.audio.networkState);
+              return debug_print("readyState: " + fg.r.s_prova.audio.readyState);
+            }
+          }
         });
         $('#stereohtml5').click(function() {
-          return fg.m.music.play('s_news', {
+          fg.m.music.play('s_news', {
             loop: true
           });
+          if (fg.r.s_news) {
+            if (fg.r.s_news.audio) {
+              debug_print("src: " + fg.r.s_news.audio.src);
+              debug_print("error: " + fg.r.s_news.audio.error);
+              debug_print("networkState: " + fg.r.s_news.audio.networkState);
+              return debug_print("readyState: " + fg.r.s_news.audio.readyState);
+            }
+          }
         });
         $('#panleft').click(function() {
           fg.m.sfx.tween({
