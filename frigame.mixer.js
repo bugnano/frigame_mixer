@@ -26,6 +26,7 @@
 
 (function ($, fg) {
 	var
+		overrides = {},
 		sm2_loaded = false,
 		sm2_ok = false,
 		audio_initialized = false,
@@ -353,6 +354,8 @@
 
 			this.setVolume(this);
 		},
+
+		remove: $.noop,
 
 		setVolume: function (options) {
 			var
@@ -808,9 +811,21 @@
 			}
 		};
 
-		fg.m.PChannel.tween = function (properties, options) {
-			return fg.fx.tween.call(this, fg.m.hooks, properties, options);
-		};
+		overrides.PChannel = fg.pick(fg.m.PChannel, [
+			'remove'
+		]);
+
+		$.extend(fg.m.PChannel, {
+			tween: function (properties, options) {
+				return fg.fx.tween.call(this, fg.m.hooks, properties, options);
+			},
+
+			remove: function () {
+				fg.fx.remove.call(this);
+
+				overrides.PChannel.remove.apply(this, arguments);
+			}
+		});
 	}
 }(jQuery, friGame));
 
