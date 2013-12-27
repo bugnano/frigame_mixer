@@ -154,8 +154,23 @@
 		// Public functions
 
 		remove: function () {
+			var
+				name = this.name
+			;
+
+			$.each(fg.m, function () {
+				if (this.sound_name === name) {
+					this.stop();
+				}
+			});
+
 			if (this.sound) {
+				this.sound.stop();
 				this.sound.destruct();
+			}
+
+			if (this.audio) {
+				this.audio.pause();
 			}
 		},
 
@@ -317,10 +332,12 @@
 	};
 
 	fg.m.PChannel = {
-		init: function (options) {
+		init: function (name, options) {
 			var
 				new_options = options || {}
 			;
+
+			this.name = name;
 
 			// Set default options
 			$.extend(this, {
@@ -355,7 +372,15 @@
 			this.setVolume(this);
 		},
 
-		remove: $.noop,
+		remove: function () {
+			var
+				name = this.name
+			;
+
+			if (fg.m[name]) {
+				delete fg.m[name];
+			}
+		},
 
 		setVolume: function (options) {
 			var
@@ -420,7 +445,7 @@
 
 	fg.m.PSingleChannel = Object.create(fg.m.PChannel);
 	$.extend(fg.m.PSingleChannel, {
-		init: function (options) {
+		init: function (name, options) {
 			var
 				channel = this
 			;
@@ -434,6 +459,12 @@
 			this.doReplay = function () {
 				channel.replay();
 			};
+		},
+
+		remove: function () {
+			this.stop();
+
+			fg.m.PChannel.remove.call(this, arguments);
 		},
 
 		// Public functions
@@ -458,6 +489,7 @@
 
 			if (sound) {
 				this.sound = sound;
+				this.sound_name = name;
 
 				if (sound_object.options.streaming) {
 					sound.stop();
@@ -485,6 +517,7 @@
 				sound.play(sound_options);
 			} else if (audio) {
 				this.audio = audio;
+				this.sound_name = name;
 
 				audio.pause();
 				audio.currentTime = audio.startTime || 0;
@@ -509,6 +542,7 @@
 				audio.play();
 			} else if (audioBuffer) {
 				this.audioBuffer = audioBuffer;
+				this.sound_name = name;
 
 				source = context.createBufferSource();
 				this.source = source;
@@ -703,13 +737,15 @@
 
 			this.source = null;
 			this.audioBuffer = null;
+
+			this.sound_name = null;
 		}
 	});
 
 	fg.m.SingleChannel = fg.Maker(fg.m.PSingleChannel);
 
 	fg.m.addSingleChannel = function (name, options) {
-		fg.m[name] = fg.m.SingleChannel(options);
+		fg.m[name] = fg.m.SingleChannel(name, options);
 
 		return this;
 	};
@@ -785,7 +821,7 @@
 	fg.m.MultiChannel = fg.Maker(fg.m.PMultiChannel);
 
 	fg.m.addMultiChannel = function (name, options) {
-		fg.m[name] = fg.m.MultiChannel(options);
+		fg.m[name] = fg.m.MultiChannel(name, options);
 
 		return this;
 	};
