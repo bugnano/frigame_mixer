@@ -352,8 +352,6 @@
 			$.extend(this, fg.pick(new_options, ['muted', 'volume', 'panning']));
 
 			if (context) {
-				this.gainNode = context.createGain();
-
 				this.gainL = context.createGain();
 				this.gainR = context.createGain();
 				this.splitter = context.createChannelSplitter(2);
@@ -365,8 +363,7 @@
 				this.gainL.connect(this.merger, 0, 0);
 				this.gainR.connect(this.merger, 0, 1);
 
-				this.merger.connect(this.gainNode);
-				this.gainNode.connect(context.destination);
+				this.merger.connect(context.destination);
 			}
 
 			this.setVolume(this);
@@ -387,7 +384,8 @@
 				new_options = options || {},
 				sound = this.sound,
 				audio = this.audio,
-				gainNode = this.gainNode,
+				merger = this.merger,
+				min = Math.min,
 				muted_redefined = new_options.muted !== undefined,
 				volume_redefined = new_options.volume !== undefined,
 				panning_redefined = new_options.panning !== undefined
@@ -414,27 +412,24 @@
 				}
 
 				// Stereo panning is not supported for HTML5 Audio
-
-				if (gainNode) {
-					this.gainL.gain.value = 1 - this.panning;
-					this.gainR.gain.value = 1 + this.panning;
-				}
 			}
 
-			if (muted_redefined || volume_redefined) {
+			if (muted_redefined || volume_redefined || panning_redefined) {
+				if (merger) {
+					if (this.muted) {
+						this.gainL.gain.value = 0;
+						this.gainR.gain.value = 0;
+					} else {
+						this.gainL.gain.value = this.volume * min(1 - this.panning, 1);
+						this.gainR.gain.value = this.volume * min(1 + this.panning, 1);
+					}
+				}
+			} else if (muted_redefined || volume_redefined) {
 				if (sound) {
 					if (this.muted) {
 						sound.setVolume(0);
 					} else {
 						sound.setVolume(Math.round(this.volume * 100));
-					}
-				}
-
-				if (gainNode) {
-					if (this.muted) {
-						gainNode.gain.value = 0;
-					} else {
-						gainNode.gain.value = this.volume;
 					}
 				}
 			}
@@ -450,7 +445,7 @@
 				channel = this
 			;
 
-			fg.m.PChannel.init.call(this, arguments);
+			fg.m.PChannel.init.apply(this, arguments);
 
 			this.doDisconnect = function () {
 				channel.disconnect();
@@ -464,7 +459,7 @@
 		remove: function () {
 			this.stop();
 
-			fg.m.PChannel.remove.call(this, arguments);
+			fg.m.PChannel.remove.apply(this, arguments);
 		},
 
 		// Public functions
