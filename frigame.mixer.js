@@ -855,6 +855,8 @@
 
 			removeTweens: function () {
 				fg.fx.remove.call(this);
+
+				return this;
 			},
 
 			remove: function () {
