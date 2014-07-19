@@ -1,4 +1,4 @@
-/*global jQuery, friGame, soundManager, Audio, AudioContext */
+/*global friGame, soundManager, Audio, AudioContext */
 /*jslint white: true, browser: true */
 
 // Copyright (c) 2011-2014 Franco Bugnano
@@ -24,7 +24,7 @@
 // Uses ideas and APIs inspired by:
 // gameQuery Copyright (c) 2008 Selim Arsever (gamequery.onaluf.org), licensed under the MIT
 
-(function ($, fg) {
+(function (fg) {
 	'use strict';
 
 	var
@@ -32,7 +32,7 @@
 		sm2_loaded = false,
 		sm2_ok = false,
 		audio_initialized = false,
-		onError = $.noop,
+		onError = fg.noop,
 		context
 	;
 
@@ -134,16 +134,16 @@
 			}
 
 			// Set default options
-			$.extend(my_options, {
+			fg.extend(my_options, {
 				// Public options
 				streaming: false
 
 				// Implementation details
 			});
 
-			$.extend(my_options, fg.pick(new_options, ['streaming']));
+			fg.extend(my_options, fg.pick(new_options, ['streaming']));
 
-			$.extend(this, {
+			fg.extend(this, {
 				// Public options
 				name: name,
 
@@ -160,7 +160,7 @@
 				name = this.name
 			;
 
-			$.each(fg.m, function () {
+			fg.each(fg.m, function () {
 				if (this.sound_name === name) {
 					this.stop();
 				}
@@ -296,11 +296,11 @@
 							this.audio = audio;
 						} else {
 							// Sound type not supported -- It is not a fatal error
-							$.noop();
+							fg.noop();
 						}
 					} else {
 						// Sound type not supported -- It is not a fatal error
-						$.noop();
+						fg.noop();
 					}
 				}
 
@@ -342,7 +342,7 @@
 			this.name = name;
 
 			// Set default options
-			$.extend(this, {
+			fg.extend(this, {
 				// Public options
 				muted: false,
 				volume: 1,
@@ -351,7 +351,7 @@
 				// Implementation details
 			});
 
-			$.extend(this, fg.pick(new_options, ['muted', 'volume', 'panning']));
+			fg.extend(this, fg.pick(new_options, ['muted', 'volume', 'panning']));
 
 			if (context) {
 				this.gainL = context.createGain();
@@ -441,7 +441,7 @@
 	};
 
 	fg.m.PSingleChannel = Object.create(fg.m.PChannel);
-	$.extend(fg.m.PSingleChannel, {
+	fg.extend(fg.m.PSingleChannel, {
 		init: function (name, options) {
 			var
 				channel = this
@@ -748,7 +748,7 @@
 	};
 
 	fg.m.PMultiChannel = Object.create(fg.m.PChannel);
-	$.extend(fg.m.PMultiChannel, {
+	fg.extend(fg.m.PMultiChannel, {
 		play: function (name, options) {
 			// options:
 			// callback: when done playing
@@ -848,7 +848,7 @@
 			'remove'
 		]);
 
-		$.extend(fg.m.PChannel, {
+		fg.extend(fg.m.PChannel, {
 			tween: function (properties, options) {
 				return fg.fx.tween.call(this, fg.m.hooks, properties, options);
 			},
@@ -870,5 +870,5 @@
 			}
 		});
 	}
-}(jQuery, friGame));
+}(friGame));
 
