@@ -533,7 +533,7 @@
 					};
 				} else {
 					audio.loop = false;
-					source.onended = this.doDisconnect;
+					audio.onended = this.doDisconnect;
 				}
 
 				audio.play();
