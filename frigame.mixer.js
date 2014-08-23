@@ -1,4 +1,4 @@
-/*global friGame, soundManager, Audio, AudioContext */
+/*global friGame, soundManager, Audio, AudioContext, ext */
 /*jslint white: true, browser: true */
 
 // Copyright (c) 2011-2014 Franco Bugnano
@@ -30,7 +30,6 @@
 	var
 		overrides = {},
 		sm2_loaded = false,
-		sm2_ok = false,
 		audio_initialized = false,
 		onError = fg.noop,
 		context
@@ -91,7 +90,6 @@
 			}
 
 			sm2_loaded = true;
-			sm2_ok = true;
 		});
 
 		soundManager.ontimeout(function() {
@@ -185,7 +183,6 @@
 				soundURLs = this.soundURLs,
 				i,
 				canPlay = fg.m.canPlay,
-				prefer_sm2 = (!context) && sm2_ok && (!(this.options.streaming)),
 				sound_url,
 				len_sound_urls,
 				format,
@@ -213,48 +210,21 @@
 				} else if (soundURLs instanceof Array) {
 					// Check which sound can be played
 					len_sound_urls = soundURLs.length;
-
-					if (prefer_sm2) {
-						for (i = 0; i < len_sound_urls; i += 1) {
-							// Determine the file type by the extension (last 3 characters)
-							format = soundURLs[i].slice(-3).toLowerCase();
-							if ((format === 'mp3') || (canPlay[format] === 'sm2')) {
-								sound_url = soundURLs[i];
-								break;
-							}
-						}
-					} else {
-						for (i = 0; i < len_sound_urls; i += 1) {
-							// Determine the file type by the extension (last 3 characters)
-							format = soundURLs[i].slice(-3).toLowerCase();
-							if (canPlay[format]) {
-								sound_url = soundURLs[i];
-								break;
-							}
+					for (i = 0; i < len_sound_urls; i += 1) {
+						// Determine the file type by the extension (last 3 characters)
+						format = soundURLs[i].slice(-3).toLowerCase();
+						if (canPlay[format]) {
+							sound_url = soundURLs[i];
+							break;
 						}
 					}
 				} else {
 					// soundURLs is an object literal
-					if (prefer_sm2) {
-						if (soundURLs.mp3) {
-							sound_url = soundURLs.mp3;
-						} else {
-							for (format in canPlay) {
-								if (canPlay[format] === 'sm2') {
-									if (soundURLs[format]) {
-										sound_url = soundURLs[format];
-										break;
-									}
-								}
-							}
-						}
-					} else {
-						for (format in canPlay) {
-							if (canPlay.hasOwnProperty(format)) {
-								if (soundURLs[format]) {
-									sound_url = soundURLs[format];
-									break;
-								}
+					for (format in canPlay) {
+						if (canPlay.hasOwnProperty(format)) {
+							if (soundURLs[format]) {
+								sound_url = soundURLs[format];
+								break;
 							}
 						}
 					}
@@ -262,7 +232,7 @@
 
 				// Step 2: Create the sound or the Audio element
 				if (sound_url) {
-					if (prefer_sm2 || (canPlay[format] === 'sm2')) {
+					if (canPlay[format] === 'sm2') {
 						// Sound supported through soundManager2
 						sound = soundManager.createSound({
 							id: this.name,
@@ -289,14 +259,18 @@
 							};
 
 							request.send();
-						} else if (this.options.streaming) {
+						} else {
 							// Sound supported through HTML5 Audio
+							if (this.options.streaming) {
+								// Tell CocoonJS to treat this sound as a music
+								if (window.ext && ext.IDTK_APP) {
+									ext.IDTK_APP.makeCall('addForceMusic', sound_url);
+								}
+							}
+
 							audio = new Audio(sound_url);
 							audio.load();
 							this.audio = audio;
-						} else {
-							// Sound type not supported -- It is not a fatal error
-							fg.noop();
 						}
 					} else {
 						// Sound type not supported -- It is not a fatal error
@@ -757,6 +731,7 @@
 				sound_options = {},
 				sound_object = fg.r[name] || {},
 				sound = sound_object.sound,
+				audio = sound_object.audio,
 				audioBuffer = sound_object.audioBuffer,
 				source,
 				channel = this
@@ -780,16 +755,34 @@
 				}
 
 				sound.play(sound_options);
+			} else if (audio) {
+				audio.pause();
+				audio.currentTime = audio.startTime || 0;
+
+				audio.muted = this.muted;
+				audio.volume = this.volume;
+				audio.loop = false;
+
+				if (new_options.callback) {
+					audio.onended = function () {
+						new_options.callback.call(channel, channel);
+					};
+				} else {
+					audio.onended = null;
+				}
+
+				audio.play();
 			} else if (audioBuffer) {
 				source = context.createBufferSource();
 				source.buffer = audioBuffer;
-				source.loop = false;
 				if (audioBuffer.numberOfChannels < 2) {
 					source.connect(this.gainL);
 					source.connect(this.gainR);
 				} else {
 					source.connect(this.splitter);
 				}
+
+				source.loop = false;
 
 				if (new_options.callback) {
 					source.onended = function () {
