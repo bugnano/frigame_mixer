@@ -117,6 +117,18 @@
 		sm2_loaded = true;
 	}
 
+	// Add an object to the preload list in order to wait for sound initialization
+	// even if there are no sounds defined
+	fg.resourceManager.preloadList.push({
+		complete: function () {
+			if (sm2_loaded && audio_initialized) {
+				return true;
+			}
+
+			return false;
+		}
+	});
+
 	fg.PSound = {
 		init: function (name, soundURLs, options) {
 			var
