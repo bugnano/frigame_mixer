@@ -374,16 +374,10 @@
 
 			if (muted_redefined) {
 				this.muted = new_options.muted;
-				if (audio) {
-					audio.muted = this.muted;
-				}
 			}
 
 			if (volume_redefined) {
 				this.volume = fg.clamp(new_options.volume, 0, 1);
-				if (audio) {
-					audio.volume = this.volume;
-				}
 			}
 
 			if (panning_redefined) {
@@ -405,12 +399,24 @@
 						this.gainR.gain.value = this.volume * min(1 + this.panning, 1);
 					}
 				}
-			} else if (muted_redefined || volume_redefined) {
+			}
+
+			if (muted_redefined || volume_redefined) {
 				if (sound) {
 					if (this.muted) {
 						sound.setVolume(0);
 					} else {
 						sound.setVolume(Math.round(this.volume * 100));
+					}
+				} else if (audio) {
+					audio.muted = this.muted;
+
+					// Some HTML5 Audio implementations do not support the muted attribute,
+					// so the audio is muted by setting its volume to 0 too.
+					if (this.muted) {
+						audio.volume = 0;
+					} else {
+						audio.volume = this.volume;
 					}
 				}
 			}
@@ -499,7 +505,14 @@
 				audio.currentTime = audio.startTime || 0;
 
 				audio.muted = this.muted;
-				audio.volume = this.volume;
+
+				// Some HTML5 Audio implementations do not support the muted attribute,
+				// so the audio is muted by setting its volume to 0 too.
+				if (this.muted) {
+					audio.volume = 0;
+				} else {
+					audio.volume = this.volume;
+				}
 
 				if (new_options.loop) {
 					audio.loop = true;
@@ -765,7 +778,15 @@
 				audio.currentTime = audio.startTime || 0;
 
 				audio.muted = this.muted;
-				audio.volume = this.volume;
+
+				// Some HTML5 Audio implementations do not support the muted attribute,
+				// so the audio is muted by setting its volume to 0 too.
+				if (this.muted) {
+					audio.volume = 0;
+				} else {
+					audio.volume = this.volume;
+				}
+
 				audio.loop = false;
 
 				if (new_options.callback) {
