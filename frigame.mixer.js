@@ -1,7 +1,7 @@
 /*global friGame, soundManager, AudioContext */
-/*jshint bitwise: true, curly: true, eqeqeq: true, esversion: 3, forin: true, freeze: true, funcscope: true, futurehostile: true, iterator: true, latedef: true, noarg: true, nocomma: true, nonbsp: true, nonew: true, notypeof: false, shadow: outer, singleGroups: false, strict: true, undef: true, unused: true, varstmt: false, eqnull: true, plusplus: true, browser: true, laxbreak: true, laxcomma: true */
+/*jshint bitwise: true, curly: true, eqeqeq: true, esversion: 3, forin: true, freeze: true, funcscope: true, futurehostile: true, iterator: true, latedef: true, noarg: true, nocomma: true, nonbsp: true, nonew: true, notypeof: false, shadow: outer, singleGroups: false, strict: true, undef: true, unused: true, varstmt: false, eqnull: false, plusplus: true, browser: true, laxbreak: true, laxcomma: true */
 
-// Copyright (c) 2011-2014 Franco Bugnano
+// Copyright (c) 2011-2015 Franco Bugnano
 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -43,6 +43,20 @@
 	fg.m = fg.mixer;
 
 	// Setup Web Audio API
+	function init() {
+		try {
+			window.AudioContext = window.AudioContext || window.webkitAudioContext;
+			context = new AudioContext();
+			context.createGain = context.createGain || context.createGainNode;
+		}
+		catch (e) {
+			context = null;
+		}
+
+		audio_initialized = true;
+	}
+
+	// Setup HTML5 Audio
 	(function () {
 		var
 			a,
@@ -74,18 +88,13 @@
 				canPlay.wav = true;
 			}
 
-			window.addEventListener('load', function () {
-				try {
-					window.AudioContext = window.AudioContext || window.webkitAudioContext;
-					context = new AudioContext();
-					context.createGain = context.createGain || context.createGainNode;
-				}
-				catch (e) {
-					context = null;
-				}
-
-				audio_initialized = true;
-			}, false);
+			// Setup Web Audio API
+			// Not all implementations have the window.onload event, so a fallback to the DOM Ready must be provided
+			if (window.onload !== undefined) {
+				window.addEventListener('load', init, false);
+			} else {
+				fg.ready(init);
+			}
 		} else {
 			audio_initialized = true;
 		}
