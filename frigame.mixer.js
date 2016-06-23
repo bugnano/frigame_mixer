@@ -1,7 +1,7 @@
-/*global friGame, soundManager, AudioContext */
+/*global friGame, soundManager, AudioContext, cordova */
 /*jshint bitwise: true, curly: true, eqeqeq: true, esversion: 3, forin: true, freeze: true, funcscope: true, futurehostile: true, iterator: true, latedef: true, noarg: true, nocomma: true, nonbsp: true, nonew: true, notypeof: false, shadow: outer, singleGroups: false, strict: true, undef: true, unused: true, varstmt: false, eqnull: false, plusplus: true, browser: true, laxbreak: true, laxcomma: true */
 
-// Copyright (c) 2011-2015 Franco Bugnano
+// Copyright (c) 2011-2016 Franco Bugnano
 
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -74,7 +74,8 @@
 				canPlay.oga = true;
 			}
 
-			if (a.canPlayType('audio/mpeg; codecs="mp3"') === 'probably') {
+			// When testing for mp3 support, some implementations always return 'maybe' to canPlayType
+			if ((a.canPlayType('audio/mpeg; codecs="mp3"') === 'probably') || (a.canPlayType('audio/mpeg; codecs="mp3"') === 'maybe')) {
 				canPlay.mp3 = true;
 			}
 
@@ -289,20 +290,45 @@
 							// Sound supported through Web Audio API
 							this.waitAudioBuffer = true;
 
-							request = new XMLHttpRequest();
+							// Due to the WKWebView not being able to
+							// use XMLHttpRequest on file:/// URIs,
+							// the cordova-plugin-file is used instead
+							// TO DO -- In order for this to work properly,
+							// we should also check that the URI is using
+							// the file:/// protocol, and if not, just use
+							// the standard XMLHttpRequest
+							if (window.cordova && cordova.file) {
+								window.resolveLocalFileSystemURL([cordova.file.applicationDirectory, 'www', '/', sound_url].join(''), function (fileEntry) {
+									fileEntry.file(function (file) {
+										var
+											reader = new FileReader()
+										;
 
-							request.open('GET', sound_url, true);
-							request.responseType = 'arraybuffer';
-
-							// Decode asynchronously
-							request.onload = function () {
-								context.decodeAudioData(request.response, function (buffer) {
-									sound_object.audioBuffer = buffer;
-									sound_object.waitAudioBuffer = false;
+										reader.onloadend = function () {
+											context.decodeAudioData(this.result, function (buffer) {
+												sound_object.audioBuffer = buffer;
+												sound_object.waitAudioBuffer = false;
+											}, onError);
+										};
+										reader.readAsArrayBuffer(file);
+									}, onError);
 								}, onError);
-							};
+							} else {
+								request = new XMLHttpRequest();
 
-							request.send();
+								request.open('GET', sound_url, true);
+								request.responseType = 'arraybuffer';
+
+								// Decode asynchronously
+								request.onload = function () {
+									context.decodeAudioData(request.response, function (buffer) {
+										sound_object.audioBuffer = buffer;
+										sound_object.waitAudioBuffer = false;
+									}, onError);
+								};
+
+								request.send();
+							}
 						} else {
 							// Sound supported through HTML5 Audio
 							audio = new Audio(sound_url);
