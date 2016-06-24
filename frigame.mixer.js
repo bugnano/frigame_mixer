@@ -36,7 +36,19 @@
 	;
 
 	fg.mixer = {
-		canPlay: {}
+		canPlay: {},
+		initCallbacks: [],
+		initCallback: function (callback) {
+			if (!audio_initialized) {
+				fg.mixer.initCallbacks.push(callback);
+			} else {
+				setTimeout(function () {
+					callback.call(fg.mixer, context);
+				}, 0);
+			}
+
+			return this;
+		}
 	};
 
 	// fg.m shortcut
@@ -44,6 +56,12 @@
 
 	// Setup Web Audio API
 	function init() {
+		var
+			i,
+			init_callbacks = fg.m.initCallbacks,
+			len_init_callbacks = init_callbacks.length
+		;
+
 		try {
 			window.AudioContext = window.AudioContext || window.webkitAudioContext;
 			context = new AudioContext();
@@ -53,7 +71,14 @@
 			context = null;
 		}
 
+		fg.m.context = context;
 		audio_initialized = true;
+
+		// Call the initCallbacks after the AudioContext has been initialized
+		for (i = 0; i < len_init_callbacks; i += 1) {
+			init_callbacks[i].call(fg.m, context);
+		}
+		init_callbacks.splice(0, len_init_callbacks);
 	}
 
 	// Setup HTML5 Audio
@@ -293,11 +318,7 @@
 							// Due to the WKWebView not being able to
 							// use XMLHttpRequest on file:/// URIs,
 							// the cordova-plugin-file is used instead
-							// TO DO -- In order for this to work properly,
-							// we should also check that the URI is using
-							// the file:/// protocol, and if not, just use
-							// the standard XMLHttpRequest
-							if (window.cordova && cordova.file) {
+							if (window.cordova && cordova.file && ((new URL(sound_url, location.href)).origin === location.origin)) {
 								window.resolveLocalFileSystemURL([cordova.file.applicationDirectory, 'www', '/', sound_url].join(''), function (fileEntry) {
 									fileEntry.file(function (file) {
 										var
