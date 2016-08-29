@@ -545,6 +545,11 @@
 				channel = this
 			;
 
+			if (window.console && (!fg.r[name])) {
+				console.error(['Sound with name', name, 'does not exist'].join(' '));
+				console.trace();
+			}
+
 			// Make sure the audio is stopped before changing its options
 			this.stop();
 
@@ -833,6 +838,11 @@
 				source,
 				channel = this
 			;
+
+			if (window.console && (!fg.r[name])) {
+				console.error(['Sound with name', name, 'does not exist'].join(' '));
+				console.trace();
+			}
 
 			if (sound) {
 				if (this.muted) {
