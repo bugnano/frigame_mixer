@@ -828,6 +828,7 @@
 		play: function (name, options) {
 			// options:
 			// callback: when done playing
+			// pitchScale: from 0.5 to 4
 			var
 				new_options = options || {},
 				sound_options = {},
@@ -906,6 +907,8 @@
 				} else {
 					source.onended = null;
 				}
+
+				source.playbackRate.value = fg.clamp(Number(new_options.pitchScale) || 1, 0.5, 4);
 
 				if (source.start) {
 					source.start(0);
