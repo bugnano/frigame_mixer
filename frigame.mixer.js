@@ -319,7 +319,7 @@
 							// use XMLHttpRequest on file:/// URIs,
 							// the cordova-plugin-file is used instead
 							if (window.cordova && cordova.file && ((new URL(sound_url, location.href)).origin === location.origin)) {
-								window.resolveLocalFileSystemURL([cordova.file.applicationDirectory, 'www', '/', sound_url].join(''), function (fileEntry) {
+								window.resolveLocalFileSystemURL(cordova.file.applicationDirectory + 'www' + '/' + sound_url, function (fileEntry) {
 									fileEntry.file(function (file) {
 										var
 											reader = new FileReader()
@@ -546,7 +546,7 @@
 			;
 
 			if (window.console && (!fg.r[name])) {
-				console.error(['Sound with name', name, 'does not exist'].join(' '));
+				console.error('Sound with name ' + name + ' does not exist');
 				console.trace();
 			}
 
@@ -841,7 +841,7 @@
 			;
 
 			if (window.console && (!fg.r[name])) {
-				console.error(['Sound with name', name, 'does not exist'].join(' '));
+				console.error('Sound with name ' + name + ' does not exist');
 				console.trace();
 			}
 
